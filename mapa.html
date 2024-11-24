@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Coordenadas</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 100vh; /* Altura del mapa para que ocupe toda la ventana */
+        }
+    </style>
+</head>
+<body>
+    <h2>Sube tu archivo CSV</h2>
+    <input type="file" id="fileInput" />
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script> <!-- Librería para parsear CSV -->
+    <script>
+        // Crear el mapa centrado en el mundo
+        const map = L.map('map').setView([0, 0], 2);
+
+        // Añadir un mapa base de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Función para manejar la carga del archivo CSV
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect, false);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // Usamos PapaParse para leer el archivo CSV
+                Papa.parse(file, {
+                    complete: function(results) {
+                        const coordinates = parseCSVData(results.data);
+                        addMarkersToMap(coordinates);
+                        checkNearbyPoints(coordinates, 0.5); // Buscar puntos cercanos dentro de 0.5 km
+                    },
+                    header: false // Asumimos que no hay cabecera en el CSV
+                });
+            }
+        }
+
+        // Función para parsear los datos del CSV
+        function parseCSVData(data) {
+            const coordinates = [];
+            data.forEach(row => {
+                if (row.length >= 2) { // Asegurarnos de que haya al menos dos columnas (latitud, longitud)
+                    const lat = parseFloat(row[0]);
+                    const lon = parseFloat(row[1]);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        coordinates.push([lat, lon]);
+                    }
+                }
+            });
+            return coordinates;
+        }
+
+        // Función para agregar los marcadores al mapa
+        function addMarkersToMap(coordinates) {
+            coordinates.forEach(([lat, lon]) => {
+                const marker = L.marker([lat, lon]).addTo(map);
+                // Mostrar las coordenadas como etiqueta encima del marcador
+                marker.bindTooltip(`Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`, { permanent: true, direction: "top" });
+            });
+        }
+
+        // Función para calcular la distancia entre dos puntos (Haversine formula)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radio de la Tierra en kilómetros
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c; // Distancia en kilómetros
+            return distance;
+        }
+
+        // Convertir grados a radianes
+        function toRad(degrees) {
+            return degrees * Math.PI / 180;
+        }
+
+        // Función para comprobar los puntos cercanos
+        function checkNearbyPoints(coordinates, threshold) {
+            for (let i = 0; i < coordinates.length; i++) {
+                for (let j = i + 1; j < coordinates.length; j++) {
+                    const lat1 = coordinates[i][0];
+                    const lon1 = coordinates[i][1];
+                    const lat2 = coordinates[j][0];
+                    const lon2 = coordinates[j][1];
+                    const distance = calculateDistance(lat1, lon1, lat2, lon2);
+
+                    // Si la distancia es menor que el umbral, mostramos los puntos cercanos
+                    if (distance < threshold) {
+                        console.log(`Puntos cercanos: (${lat1}, ${lon1}) y (${lat2}, ${lon2}) - Distancia: ${distance.toFixed(2)} km`);
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
